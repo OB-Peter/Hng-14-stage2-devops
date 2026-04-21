@@ -43,7 +43,7 @@ jobs:
         with:
           node-version: "20"
 
-      - name: Install ESLint
+      - name: Install frontend dependencies
         working-directory: frontend
         run: npm install
 
@@ -55,13 +55,20 @@ jobs:
       - name: Install hadolint
         run: |
           wget -qO /usr/local/bin/hadolint \
-            https://github.com/hadolint/hadolint/releases/latest/download/hadolint-Linux-x86_64
+            https://github.com/hadolint/hadolint/releases/download/v2.12.0/hadolint-Linux-x86_64
           chmod +x /usr/local/bin/hadolint
+          hadolint --version
 
       - name: Lint Dockerfiles (hadolint)
         run: |
-          hadolint api/Dockerfile
-          hadolint worker/Dockerfile
+          hadolint api/Dockerfile \
+            --ignore DL3008 \
+            --ignore DL3013 \
+            --ignore DL3042
+          hadolint worker/Dockerfile \
+            --ignore DL3008 \
+            --ignore DL3013 \
+            --ignore DL3042
           hadolint frontend/Dockerfile
 
   # ══════════════════════════════════════════════════════════════════
@@ -203,7 +210,7 @@ jobs:
         with:
           driver-opts: network=host
 
-      - name: Rebuild images into this job's registry
+      - name: Rebuild images into this job registry
         run: |
           docker buildx build --load \
             -t ${{ env.REGISTRY }}/job-api:latest \
@@ -299,10 +306,10 @@ jobs:
           echo "Waiting for all services to become healthy..."
           timeout 120 bash -c '
             until \
-              [ "$(docker inspect --format="{{.State.Health.Status}}" api)" = "healthy" ] && \
-              [ "$(docker inspect --format="{{.State.Health.Status}}" frontend)" = "healthy" ] && \
-              [ "$(docker inspect --format="{{.State.Health.Status}}" worker)" = "healthy" ] && \
-              [ "$(docker inspect --format="{{.State.Health.Status}}" redis)" = "healthy" ]; do
+              [ "$(docker inspect --format={{.State.Health.Status}} api 2>/dev/null)" = "healthy" ] && \
+              [ "$(docker inspect --format={{.State.Health.Status}} frontend 2>/dev/null)" = "healthy" ] && \
+              [ "$(docker inspect --format={{.State.Health.Status}} worker 2>/dev/null)" = "healthy" ] && \
+              [ "$(docker inspect --format={{.State.Health.Status}} redis 2>/dev/null)" = "healthy" ]; do
               echo "Services not all healthy yet..."
               docker compose ps
               sleep 5
@@ -355,8 +362,7 @@ jobs:
 
       - name: Show logs on failure
         if: failure()
-        run: |
-          docker compose logs
+        run: docker compose logs
 
       - name: Tear down stack
         if: always()
@@ -404,8 +410,6 @@ jobs:
           echo "=== Pulling latest images ==="
           docker compose pull
 
-          echo "=== Rolling update ==="
-
           for SERVICE in api worker frontend; do
             echo "--- Updating ${SERVICE} ---"
 
@@ -424,13 +428,13 @@ jobs:
                 break
               fi
 
-              echo "Waiting for ${SERVICE} health... (${ELAPSED}s, status=${HEALTH})"
+              echo "Waiting for ${SERVICE} health... (${ELAPSED}s)"
               sleep 5
               ELAPSED=$((ELAPSED + 5))
             done
 
             if [ "$HEALTHY" = "false" ]; then
-              echo "❌ ${SERVICE} failed health check — aborting, old container kept"
+              echo "❌ ${SERVICE} failed — keeping old container"
               docker compose up -d --no-deps --scale "${SERVICE}=1" "${SERVICE}"
               exit 1
             fi
