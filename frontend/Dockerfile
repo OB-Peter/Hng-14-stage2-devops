@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1
 
-# ── Stage 1: Builder ──────────────────────────────────────────────────────────
+# ── Stage 1: Builder ──────────────────────────────────────────────
 FROM node:20-alpine AS builder
 
 WORKDIR /build
@@ -10,7 +10,7 @@ COPY package*.json ./
 RUN npm ci --omit=dev
 
 
-# ── Stage 2: Production ───────────────────────────────────────────────────────
+# ── Stage 2: Production ───────────────────────────────────────────
 FROM node:20-alpine AS production
 
 RUN addgroup --gid 1001 appgroup \

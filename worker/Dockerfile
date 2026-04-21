@@ -1,5 +1,6 @@
 # syntax=docker/dockerfile:1
 
+# ── Stage 1: Builder ──────────────────────────────────────────────
 FROM python:3.12-slim AS builder
 
 WORKDIR /build
@@ -10,9 +11,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 COPY requirements.txt .
 
-RUN pip install --upgrade pip \
+RUN pip install --no-cache-dir --upgrade pip \
     && pip install --no-cache-dir --prefix=/install -r requirements.txt
 
+
+# ── Stage 2: Production ───────────────────────────────────────────
 FROM python:3.12-slim AS production
 
 RUN groupadd --gid 1001 appgroup \
